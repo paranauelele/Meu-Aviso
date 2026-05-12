@@ -1,10 +1,12 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
-});
+const genAI = new GoogleGenerativeAI(
+  import.meta.env.VITE_GEMINI_API_KEY || ''
+);
 
 export const extractEntities = async (text: string) => {
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
   const now = new Date();
   const nowFormatted = now.toLocaleString('pt-BR', {
     weekday: 'long', day: '2-digit', month: 'long',
@@ -40,14 +42,14 @@ SEVERIDADE:
 - "medium": hoje, amanhã, próximas horas
 - "low": sem data, informativo
 
-INTERPRETAÇÃO DE TEMPO (use a data/hora atual como base):
+INTERPRETAÇÃO DE TEMPO:
 - "daqui uma hora" = agora + 1h
 - "daqui 30 minutos" = agora + 30min
 - "amanhã às 10h" = amanhã 10:00
 - "hoje à tarde" = hoje 15:00
 - "hoje à noite" = hoje 20:00
 - "hoje de manhã" = hoje 09:00
-- "dia 15" = dia 15 do mês atual (ou próximo mês se já passou)
+- "dia 15" = dia 15 do mês atual
 - "semana que vem" = próxima segunda-feira
 - Sem tempo → dateTime: null
 
@@ -66,12 +68,9 @@ Texto: "${text}"
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
-    });
-
-    let raw = response.text?.trim() || '';
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let raw = response.text().trim();
     raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(raw);
   } catch (error) {
@@ -79,5 +78,3 @@ Texto: "${text}"
     return null;
   }
 };
-
-export default ai;
