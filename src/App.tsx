@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion } from 'motion/react'
 import { 
   Bell, Clock, MapPin, Sun, ChevronRight, 
-  Plus, Trash2, Zap, Moon, Volume2
+  Trash2, Zap, Moon
 } from 'lucide-react'
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 interface Reminder {
   id: string
@@ -23,18 +23,22 @@ interface Alarm {
   isActive: boolean
 }
 
-const aiService = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY })
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || '')
 
 async function extractReminder(text: string) {
   try {
-    const response = await aiService.models.generateContent({
-      model: 'gemini-1.5-flash',
-      config: {
-        systemInstruction: "Você é um assistente. Extraia informações do texto e retorne APENAS um JSON: { label: string, date: 'YYYY-MM-DD', time: 'HH:mm', location: string }. Se a data for relativa, calcule a data real.",
-      },
-      contents: text,
-    })
-    const jsonStr = response.text.replace(/```json|```/g, '').trim()
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const now = new Date()
+    const prompt = `
+Você é um assistente. Data e hora atual: ${now.toLocaleString('pt-BR')}.
+Extraia informações do texto e retorne APENAS um JSON puro sem marcações:
+{ "label": "string", "date": "YYYY-MM-DD", "time": "HH:mm", "location": "string ou null" }
+Se a data for relativa (amanhã, semana que vem, daqui 1 hora), calcule a data real.
+Texto: "${text}"
+    `
+    const result = await model.generateContent(prompt)
+    const response = await result.response
+    const jsonStr = response.text().replace(/```json|```/g, '').trim()
     return JSON.parse(jsonStr)
   } catch (e) {
     console.error(e)
@@ -93,7 +97,7 @@ export default function App() {
       alarms.forEach(alarm => {
         if (alarm.isActive && alarm.time === currentTime && now.getSeconds() < 2) {
           if (Notification.permission === 'granted') {
-            new Notification("⏰ DESPERTADOR", { body: alarm.label })
+            new Notification('⏰ DESPERTADOR', { body: alarm.label })
           } else {
             alert(`⏰ ALARME: ${alarm.label}`)
           }
@@ -103,6 +107,12 @@ export default function App() {
     const interval = setInterval(checkAlarms, 1000)
     return () => clearInterval(interval)
   }, [alarms])
+
+  useEffect(() => {
+    if (Notification.permission !== 'granted') {
+      Notification.requestPermission()
+    }
+  }, [])
 
   const handleAddReminder = async () => {
     if (!inputText.trim()) return
@@ -140,12 +150,6 @@ export default function App() {
     }])
   }
 
-  useEffect(() => {
-    if (Notification.permission !== 'granted') {
-      Notification.requestPermission()
-    }
-  }, [])
-
   return (
     <div className="min-h-screen pb-20 bg-gradient-to-b from-[#020617] to-[#0f172a] font-sans text-white">
       <header className="p-6 pt-10 flex justify-between items-center">
@@ -180,7 +184,7 @@ export default function App() {
                 disabled={loading || !inputText}
                 className="w-full bg-gradient-to-r from-[#bf953f] to-[#aa771c] py-4 rounded-xl text-black font-black uppercase flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-50"
               >
-                {loading ? 'Processando...' : <>Adicionar Aviso <ChevronRight className="w-5 h-5" /></>}
+                {loading ? 'Processando...' : <><span>Adicionar Aviso</span> <ChevronRight className="w-5 h-5" /></>}
               </button>
             </GlassCard>
 
